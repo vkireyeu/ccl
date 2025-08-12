@@ -1,0 +1,44 @@
+Let's Be Scientific License
+
+Version 1.0, October 2025
+
+Preamble:
+
+The "Let's Be Scientific" License is designed to promote open scientific collaboration while ensuring transparency, attribution, and control over the public dissemination of results derived from the software.
+
+1. Definitions
+   - "Software" refers to the program, its source code, documentation, and any related materials distributed under this License.
+   - "Author(s)" refers to the original developer(s) of the Software.
+   - "User" refers to any person or organization using, modifying, or redistributing the Software.
+   - "Modified Version" means any derivative work that changes, extends, or adapts the Software.
+
+2. Free Use
+   The Software is provided free of charge for any use, including personal, academic, or commercial purposes, without any royalties or fees.
+
+3. Modification and Backporting
+   Users are permitted to create Modified Versions of the Software.
+   Any modifications must be clearly documented, including a detailed description of changes made.
+   Modified Versions must be made available to the Author(s), upon reasonable request, for review and potential backporting into the original Software, in a format accessible to the Author(s), such as through a public repository or direct communication.
+   The source code or a detailed changelog of the Modified Version must be provided to the Author(s) upon request.
+
+4. Attribution
+   Any use of the Software, whether in its original form or as a Modified Version, must include attribution to the original Software and its Author(s).
+   Attribution must include the Software name, version, and Author(s)' names in a prominent location, such as the acknowledgments section of publications, presentations, or documentation of derived works.
+
+5. Publication of Results
+   Public disclosure of results obtained using this Software — including, but not limited to, journal articles, conference papers, theses, or presentations — requires explicit written permission from the Author(s) prior to publication.
+
+6. Redistribution
+   Redistribution of the Software, in its original form or as a Modified Version, is permitted provided that:
+   (a) this License is included in its entirety;
+   (b) all modifications are clearly documented; and
+   (c) the source code or a detailed changelog is made available to the Author(s) and recipients.
+
+7. No Warranty
+   The Software is provided "as is," without warranty of any kind, express or implied, including but not limited to warranties of merchantability, fitness for a particular purpose, or non-infringement.
+   The Author(s) shall not be liable for any damages resulting from the use or inability to use the Software.
+
+
+By using, modifying, or redistributing this Software, the User agrees to be bound by the terms of this License.
+
+Copyright (c) 2025 Viktar Kireyeu. All rights reserved.

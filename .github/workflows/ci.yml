@@ -1,0 +1,35 @@
+name: Build
+
+on:
+  push:
+
+jobs:
+  build:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Configure
+      - name: Configure
+        run: cmake -S . -B build
+
+      # Build
+      - name: Build
+        run: cmake --build build -j
+
+      # Test
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
+      # Upload logs if something fails
+      - name: Upload logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logs-macos
+          path: |
+            build/*.log
+            build/Testing/**/Test.xml
+            build/LastTest.log
