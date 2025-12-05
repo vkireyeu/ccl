@@ -8,8 +8,50 @@ void CClusterizer::updateStableVector(const std::vector<CCParticle>& input,
                                       std::vector<CCParticle>& output) {
     if (input.empty()) return;
 
-    std::vector<CCParticle>  input_copy = input;
+    std::vector<CCParticle> input_copy = input;
     const size_t N = input_copy.size();
+
+    // Collect last collision times of all input baryons: bound and free
+    std::unordered_map<int, double> latest_collision_time;
+    for (auto& p : input_copy) {
+        if (p.getType() > ParticleType::LambdaSigma) {
+            for (auto* c : p.getChildsPtrs()) {
+                latest_collision_time[c -> getUniqueID()] = c -> getCollisionTime();
+            }
+        }
+        else {
+            latest_collision_time[p.getUniqueID()] = p.getCollisionTime();
+        }
+    }
+
+    // Filter the stored (stable candidates) clusters using last collision time information
+    for (size_t i = 0; i < output.size();) {
+        auto& stored_cluster = output[i];
+        bool invalid = false;
+
+        for (auto* c : stored_cluster.getChildsPtrs()) {
+            auto it = latest_collision_time.find(c -> getUniqueID());
+            if (it == latest_collision_time.end()) {
+                // Baryon disappeared, stored cluster was not stable -- remove stored cluster
+                invalid = true;
+                break;
+            }
+            if (c -> getCollisionTime() < it -> second) {
+                // Baryon had collision after stored cluster was foun -- remove stored cluster
+                invalid = true;
+                break;
+            }
+        }
+        // Removal
+        if (invalid) {
+            output[i] = std::move(output.back());
+            output.pop_back();
+        }
+        else {
+            ++i;
+        }
+    }
+
 
     // For each input particle
     for (auto& p : input_copy) {
@@ -18,7 +60,8 @@ void CClusterizer::updateStableVector(const std::vector<CCParticle>& input,
         // And select only clusters with Ebind < less than defined cut
         if(tr_UseEbind && p.getBindingEnergy() > tr_EbindCut) continue;
 
-        auto childsPtrs = p.getChildsPtrs();               // Constituent particles of current cluster
+        // Constituent particles of current cluster
+        auto childsPtrs = p.getChildsPtrs();
 
         // Small check for the particle collision time larger than current time step
         // Maybe this part is not needed -- left for a while
@@ -69,7 +112,6 @@ void CClusterizer::updateStableVector(const std::vector<CCParticle>& input,
                 }
                 ++idx;
             }
-
             // If current cluster is not new
             if (!is_new) {
                 size_t max_size = 0;
@@ -77,31 +119,9 @@ void CClusterizer::updateStableVector(const std::vector<CCParticle>& input,
                 for (auto i : overlapping) {
                     max_size = std::max(max_size, output[i].getChildsPtrs().size());
                 }
-                bool allow_reduce = false;
 
-                // Loop over only these previously stored clusters
-                for (auto i : overlapping) {
-                    auto StoredClusterChildsPtrs = output[i].getChildsPtrs();
-                    // Collect collisions times of the stored clusters constituents into the map: [unique ID  -- collision time]
-                    std::unordered_map<long, double> stored_times;
-                    for (auto* sc : StoredClusterChildsPtrs) {
-                        stored_times[sc->getUniqueID()] = sc -> getCollisionTime();
-                    }
-
-                    // For the each constituent of the current cluster
-                    for (auto* c : childsPtrs) {
-                        auto uid = c -> getUniqueID();
-                        // Check if collision time for the same particle by UID increased
-                        if (stored_times.count(uid) && c -> getCollisionTime() > stored_times[uid]) {
-                            allow_reduce = true;
-                            break;
-                        }
-                    }
-                    if (allow_reduce) break;
-                }
-                // If the collision time did not increased allow the stored cluster to became bigger
-                // Allow stored cluster to became smaller only if the collision time increased 
-                if (childsPtrs.size() > max_size || (childsPtrs.size() <= max_size && allow_reduce)) {
+                // Allow stored cluster to became bigger
+                if (childsPtrs.size() > max_size) {
                     std::sort(overlapping.begin(), overlapping.end(), std::greater<size_t>());
                     for (auto i : overlapping) {
                         output.erase(output.begin() + i);
