@@ -8,7 +8,8 @@
 
 ## Common Clusterization Library (CCL)
 
-Logical evolution of the [psMST](https://gitlab.com/vkireyeu/psmst) library.
+Results on arXiv: [https://arxiv.org/abs/2512.02084](https://arxiv.org/abs/2512.02084).  
+The used CCL version: [v1.0.0](https://github.com/vkireyeu/ccl/releases/tag/v1.0.0).    
 
 CCL contains:
 - MST procedure: pure distance-based with optional inclusion of the momentum space.
@@ -44,6 +45,8 @@ sudo cmake --install build --prefix /usr/local
 [arxiv:1906.06162](https://arxiv.org/abs/1906.06162)
 
 - Coalescence (in [UrQMD](https://itp.uni-frankfurt.de/~bleicher/index.html?content=urqmd) approach): [Phys.Rev.C 99 (2019) 1, 014901](https://doi.org/10.1103/PhysRevC.99.014901), [Phys.Rev.C 107 (2023) 1, 014912](https://doi.org/10.1103/PhysRevC.107.014912)
+
+- [psMST](https://gitlab.com/vkireyeu/psmst) library &mdash; ancestor of CCL.
 
 ## Authors
 * **Viktar Kireyeu** - *Initial work*  
