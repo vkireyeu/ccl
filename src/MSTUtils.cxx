@@ -620,7 +620,9 @@ std::vector<CCParticle> CClusterizer::makeSAchain(const std::vector<CCParticle>&
 
         CClusterizer *cls = new CClusterizer();
         cls -> setAlphaBetaGamma(CClusterizer::getAlpha(), CClusterizer::getBeta(), CClusterizer::getGamma());
+        cls -> setSkyrmeFormula(CClusterizer::getSkyrmeFormula());
         cls -> setComputeEbind(true);
+        cls -> setHyPot(CClusterizer::getHyPot());
         cls -> setSASteps(CClusterizer::getSASteps() * 2);
         cls -> setSATmin(CClusterizer::getSATmin());
 
@@ -639,6 +641,7 @@ std::vector<CCParticle> CClusterizer::makeSAchain(const std::vector<CCParticle>&
                 }
             }
         }
+        delete(cls);
     }
     else{
         for (auto &p : free)           final_particles.push_back(p);

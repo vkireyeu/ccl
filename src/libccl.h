@@ -67,11 +67,11 @@ class CClusterizer{
         virtual ~CClusterizer();
 
 
-        void setMomentum(double momentum)     {Momentum      = momentum;}
-        void setCheckPairMomentum(bool check) {CheckMomentum =    check;}
-        void setCheckMomentum(bool check)     {CheckMomentum =    check;}
-        void setComputeEbind(bool check)      {ComputeEbind  =    check;}
-        void setTrueTimeMST(bool check)       {TrueTimeMST   =    check;}
+        void setMomentum(double momentum)     {Momentum          = momentum;}
+        void setCheckPairMomentum(bool check) {CheckPairMomentum = check;}
+        void setCheckMomentum(bool check)     {CheckMomentum     = check;}
+        void setComputeEbind(bool check)      {ComputeEbind      = check;}
+        void setTrueTimeMST(bool check)       {TrueTimeMST       = check;}
 
         void setRadius(double radius) {
             if (radius < 0.0) {
