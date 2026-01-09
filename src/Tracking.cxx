@@ -52,7 +52,6 @@ void CClusterizer::updateStableVector(const std::vector<CCParticle>& input,
         }
     }
 
-
     // For each input particle
     for (auto& p : input_copy) {
 
@@ -136,4 +135,3 @@ void CClusterizer::updateStableVector(const std::vector<CCParticle>& input,
         }
     }
 }
-

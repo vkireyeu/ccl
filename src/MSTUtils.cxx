@@ -195,6 +195,17 @@ std::vector<CCParticle> CClusterizer::makeMST(const std::vector<CCParticle>& inp
 }
 
 
+// This struct handles information of a move in makeSA() and makeSA2():
+struct MoveRecord {
+    int src_id = -1;                // source cluster ID
+    int dst_id = -1;                // destination cluster ID
+    size_t src_index = 0;           // ID of baryon to move in source cluster
+    size_t dst_index = 0;           // ID of baryon to move in destination cluster
+    bool removed_src = false;       // true if source cluster dissapear after the move
+    bool created_dst = false;       // true if destination cluster is a new (non existing!) cluster
+    CCParticle* moved = nullptr;    // point to the baryon what was moved
+};
+
 
 // ---------------------------------------------------------------------
 // Simulated Annealing procedure implementation: 
@@ -214,14 +225,11 @@ std::vector<CCParticle> CClusterizer::makeSA(const std::vector<CCParticle>& inpu
     const bool   useMH     =  sa_MHCriterion; // Metropolis–Hastings criterion (use it or not)
 
 
-    // Helper: total binding energy of the system.
-    auto system_energy = [&](const std::map<int, std::vector<CCParticle*>>& system) -> double {
-        double E = 0.0;
-        for (const auto& pair : system) {
-            size_t constituents = pair.second.size();
-            if (constituents > 1) E += computeBindingEnergy(pair.second, this) * constituents;
-        }
-        return E;
+    // Helper: binding energy of a single cluster (0 for singletons).
+    auto cluster_energy = [&](const std::vector<CCParticle*>& cluster) -> double {
+        size_t constituents = cluster.size();
+        if (constituents > 1) return computeBindingEnergy(cluster, this) * constituents;
+        return 0.0;
     };
 
 
@@ -231,11 +239,39 @@ std::vector<CCParticle> CClusterizer::makeSA(const std::vector<CCParticle>& inpu
         int cls_id = p.getClusterID();
         mapClusters[cls_id].push_back(&p);
     }
-    double initialSystemEbind = system_energy(mapClusters);
 
-    double currE = initialSystemEbind;                                // 'Current' energy variable
-    double bestE = initialSystemEbind;                                // 'Best' (lowest) energy found
+
+    double totalE = 0.0;
+    // Per-cluster energy also will be stored now
+    std::map<int, double> clusterE;
+    for (const auto& pair : mapClusters) {
+        double e = cluster_energy(pair.second);
+        clusterE[pair.first] = e;
+        totalE += e;
+    }
+
+    double currE = totalE;                                            // 'Current' energy variable
+    double bestE = totalE;                                            // 'Best' (lowest) energy found
     std::map<int, std::vector<CCParticle*>> bestSystem = mapClusters; // 'Best' system with the lowest binding energy
+
+    // List of clusters IDs
+    std::vector<int> activeClusters;
+    activeClusters.reserve(mapClusters.size());
+    for (const auto& pair : mapClusters){
+        activeClusters.push_back(pair.first);
+    }
+    int maxClusterId = mapClusters.rbegin() -> first;
+
+    // Helper function for removal cluster from activeClusters
+    auto remove_active = [&](int id) {
+        auto it = std::lower_bound(activeClusters.begin(), activeClusters.end(), id);
+        if (it != activeClusters.end() && *it == id) activeClusters.erase(it);
+    };
+    // Helper function to add cluster there
+    auto add_active = [&](int id) {
+        auto it = std::lower_bound(activeClusters.begin(), activeClusters.end(), id);
+        activeClusters.insert(it, id);
+    };
 
 
     // Classical SA
@@ -257,72 +293,101 @@ std::vector<CCParticle> CClusterizer::makeSA(const std::vector<CCParticle>& inpu
             pNew = sa_PnewMin + (sa_Pnew - sa_PnewMin) * ratio;
         }
 
+        // Stagnation counter
+        int stagnant = 0;
+        const int stagnation_limit = std::max(sa_StagMin, steps / std::max(1, sa_StagDenom));
+
 
         //   loop over steps for each "temperature" level
         for (int s = 0; s < steps; ++s) {
-            std::map<int, std::vector<CCParticle*>> mapTestSystem = mapClusters;
-            std::vector<int> clustersKeys;
-            clustersKeys.reserve(mapTestSystem.size());
-            for (auto const& key : mapTestSystem) clustersKeys.push_back(key.first);
-
-            std::uniform_int_distribution<int> pickClusterIndex(0, clustersKeys.size() - 1);
+            std::uniform_int_distribution<int> pickClusterIndex(0, activeClusters.size() - 1);
 
             double PROB = U01()(get_rng());
 
             // Only free particles (no clusters anymore) -- only merge step
-            if(clustersKeys.size() == N) {
+            if(activeClusters.size() == N) {
                 PROB = pNew * 1.1;
             }
             // Only one single cluster available -- only 'new singletop' step
-            else if(clustersKeys.size() == 1) {
+            else if(activeClusters.size() == 1) {
                 PROB = pNew * 0.1;
             }
 
+            MoveRecord rec;
+            int testBaryonIdx = 0;
+            size_t inputClusterSize = 0;
+
             // Move some baryon from some cluster to the singleton (it will be free)
             if (PROB < pNew) {
-                size_t inputClusterSize = 0;
-                int inputClusterIdx = -1;
                 while (inputClusterSize < 2){
-                    inputClusterIdx = clustersKeys[pickClusterIndex(get_rng())];
-                    inputClusterSize = mapTestSystem[inputClusterIdx].size();
+                    rec.src_id = activeClusters[pickClusterIndex(get_rng())];
+                    inputClusterSize = mapClusters[rec.src_id].size();
                 }
+                std::uniform_int_distribution<int> pickClusterBaryon(0, int(mapClusters[rec.src_id].size()) - 1);
+                testBaryonIdx = pickClusterBaryon(get_rng());
 
-                std::uniform_int_distribution<int> pickClusterBaryon(0, int(mapTestSystem[inputClusterIdx].size()) - 1);
+                int newClusterId = ++maxClusterId;
 
-                int testBaryonIdx = pickClusterBaryon(get_rng());
-                //~ int maxClusterId = mapTestSystem.rbegin()->first;
-                int maxClusterId = *std::max_element(clustersKeys.begin(), clustersKeys.end());
-                int newClusterId = maxClusterId + 1;
+                rec.dst_id       = newClusterId;
+                rec.created_dst  = true;
+                rec.src_index    = static_cast<size_t>(testBaryonIdx);
+                rec.dst_index    = 0;
+                rec.moved        = mapClusters[rec.src_id][testBaryonIdx];
 
-                mapTestSystem[newClusterId].push_back(mapTestSystem[inputClusterIdx][testBaryonIdx]);
-                mapTestSystem[inputClusterIdx].erase(mapTestSystem[inputClusterIdx].begin() + testBaryonIdx);
+                mapClusters[newClusterId].push_back(rec.moved);
+                mapClusters[rec.src_id].erase(mapClusters[rec.src_id].begin() + testBaryonIdx);
+                add_active(rec.dst_id);
             }
             // Move some baryon, single or from some cluster to another cluster or existing singleton (so it will be cluster too)
             else {
-                int inputClusterIdx = clustersKeys[pickClusterIndex(get_rng())];
-                int outpuClusterIdx = clustersKeys[pickClusterIndex(get_rng())];
-                int testBaryonIdx = 0;
-                size_t inputClusterSize = mapTestSystem[inputClusterIdx].size();
+                rec.src_id = activeClusters[pickClusterIndex(get_rng())];
+                rec.dst_id = activeClusters[pickClusterIndex(get_rng())];
+                inputClusterSize = mapClusters[rec.src_id].size();
                 if (inputClusterSize > 1){
-                    std::uniform_int_distribution<int> pickClusterBaryon(0, int(mapTestSystem[inputClusterIdx].size()) - 1);
+                    std::uniform_int_distribution<int> pickClusterBaryon(0, int(mapClusters[rec.src_id].size()) - 1);
                     testBaryonIdx = pickClusterBaryon(get_rng());
                 }
                 
-                while (inputClusterIdx == outpuClusterIdx){
-                    outpuClusterIdx = clustersKeys[pickClusterIndex(get_rng())];
+                while (rec.src_id == rec.dst_id){
+                    rec.dst_id = activeClusters[pickClusterIndex(get_rng())];
                 }
 
-                mapTestSystem[outpuClusterIdx].push_back(mapTestSystem[inputClusterIdx][testBaryonIdx]);
+                rec.src_index = static_cast<size_t>(testBaryonIdx);
+                rec.dst_index = mapClusters[rec.dst_id].size();
+                rec.moved     = mapClusters[rec.src_id][testBaryonIdx];
+
+                mapClusters[rec.dst_id].push_back(rec.moved);
+
                 if (inputClusterSize == 1){
-                    mapTestSystem[inputClusterIdx].erase(mapTestSystem[inputClusterIdx].begin() + testBaryonIdx);
-                    mapTestSystem.erase(inputClusterIdx);
+                    mapClusters[rec.src_id].erase(mapClusters[rec.src_id].begin() + testBaryonIdx);
+                    mapClusters.erase(rec.src_id);
+                    rec.removed_src = true;
+                    remove_active(rec.src_id);
                 }
                 else{
-                    mapTestSystem[inputClusterIdx].erase(mapTestSystem[inputClusterIdx].begin() + testBaryonIdx);
+                    mapClusters[rec.src_id].erase(mapClusters[rec.src_id].begin() + testBaryonIdx);
                 }
             }
 
-            double newE = system_energy(mapTestSystem);
+            // Old binding energy of modified clusters
+            double oldEin  = 0.0;
+            double oldEout = 0.0;
+            if (clusterE.count(rec.src_id)) oldEin  = clusterE[rec.src_id];
+            if (clusterE.count(rec.dst_id)) oldEout = clusterE[rec.dst_id];
+
+            // New binding energy of modified clusters
+            double newEin  = 0.0;
+            double newEout = 0.0;
+            if (mapClusters.count(rec.src_id)){
+                newEin = cluster_energy(mapClusters[rec.src_id]);
+            }
+            if (mapClusters.count(rec.dst_id)){
+                newEout = cluster_energy(mapClusters[rec.dst_id]);
+            }
+
+            // New total binding energy of the system
+            double newE = currE + (newEin - oldEin) + (newEout - oldEout);
+
             double dE   = newE - currE;
             bool accept = false;
 
@@ -337,10 +402,41 @@ std::vector<CCParticle> CClusterizer::makeSA(const std::vector<CCParticle>& inpu
                 }
             }
 
-            if(!accept) continue;
+            if(!accept) {
+                if (rec.created_dst){
+                    mapClusters[rec.dst_id].erase(mapClusters[rec.dst_id].begin() + rec.dst_index);
+                    mapClusters.erase(rec.dst_id);
+                    remove_active(rec.dst_id);
+                    mapClusters[rec.src_id].insert(mapClusters[rec.src_id].begin() + rec.src_index, rec.moved);
+                }
+                else{
+                    mapClusters[rec.dst_id].erase(mapClusters[rec.dst_id].begin() + rec.dst_index);
+                    if (rec.removed_src){
+                        mapClusters[rec.src_id].push_back(rec.moved);
+                        add_active(rec.src_id);
+                    }
+                    else{
+                        mapClusters[rec.src_id].insert(mapClusters[rec.src_id].begin() + rec.src_index, rec.moved);
+                    }
+                }
+                // Stagnation increased here
+                stagnant++;
+                if (stagnant >= stagnation_limit) break;
+                continue;
+            }
 
-            mapClusters = std::move(mapTestSystem);
+            stagnant = 0;
             currE = newE;
+            if (mapClusters.count(rec.src_id)){
+                clusterE[rec.src_id] = newEin;
+            } else {
+                clusterE.erase(rec.src_id);
+            }
+            if (mapClusters.count(rec.dst_id)){
+                clusterE[rec.dst_id] = newEout;
+            } else {
+                clusterE.erase(rec.dst_id);
+            }
             if (currE < bestE){
                 bestE      = currE;
                 bestSystem = mapClusters;
@@ -394,30 +490,25 @@ std::vector<CCParticle> CClusterizer::makeSA2(const std::vector<CCParticle>& inp
     const bool   useMH     =  sa_MHCriterion; // Metropolis–Hastings criterion (use it or not)
 
 
-    // Helper: total binding energy of the system.
-    auto system_energy = [&](const std::map<int, std::vector<CCParticle*>>& system) -> double {
-        double E = 0.0;
-        for (const auto& pair : system) {
-            int    uid  = pair.first;
-            auto   pvec = pair.second;
-            std::vector<CCParticle*> group;
-            for (const auto& p : pvec) {
-                auto   childsPtrs = p -> getChildsPtrs();
-                size_t childsSize = childsPtrs.size();
-                if (childsSize > 1){
-                    for(const auto &c: childsPtrs){
-                        group.push_back(c);
-                    }
-                }
-                else{
-                    group.push_back(p);
+    // Helper: binding energy of a single cluster (0 for singletons).
+    auto cluster_energy = [&](const std::vector<CCParticle*>& pvec) -> double {
+        std::vector<CCParticle*> group;
+        for (const auto& p : pvec) {
+            auto   childsPtrs = p -> getChildsPtrs();
+            size_t childsSize = childsPtrs.size();
+            if (childsSize > 1){
+                for(const auto &c: childsPtrs){
+                    group.push_back(c);
                 }
             }
-            if(group.size() > 1){
-                E += computeBindingEnergy(group, this) * group.size();
+            else{
+                group.push_back(p);
             }
         }
-        return E;
+        if(group.size() > 1){
+            return computeBindingEnergy(group, this) * group.size();
+        }
+        return 0.0;
     };
 
     // Starting system
@@ -426,11 +517,30 @@ std::vector<CCParticle> CClusterizer::makeSA2(const std::vector<CCParticle>& inp
         int uid = p.getUniqueID();
         mapSystem[uid].push_back(&p);
     }
-    double initialSystemEbind = system_energy(mapSystem);
+    std::map<int, double> clusterE;
+    double totalE = 0.0;
+    for (const auto& pair : mapSystem) {
+        double e = cluster_energy(pair.second);
+        clusterE[pair.first] = e;
+        totalE += e;
+    }
 
-    double currE = initialSystemEbind;                              // 'Current' energy variable
-    double bestE = initialSystemEbind;                              // 'Best' (lowest) energy found
+    double currE = totalE;                                          // 'Current' energy variable
+    double bestE = totalE;                                          // 'Best' (lowest) energy found
     std::map<int, std::vector<CCParticle*>> bestSystem = mapSystem; // 'Best' system with the lowest binding energy
+    std::vector<int> activeClusters;
+    activeClusters.reserve(mapSystem.size());
+    for (const auto& pair : mapSystem) activeClusters.push_back(pair.first);
+
+    auto remove_active = [&](int id) {
+        auto it = std::lower_bound(activeClusters.begin(), activeClusters.end(), id);
+        if (it != activeClusters.end() && *it == id) activeClusters.erase(it);
+    };
+
+    auto add_active = [&](int id) {
+        auto it = std::lower_bound(activeClusters.begin(), activeClusters.end(), id);
+        activeClusters.insert(it, id);
+    };
 
     // Classical SA
     int sa_level = 0;
@@ -444,42 +554,59 @@ std::vector<CCParticle> CClusterizer::makeSA2(const std::vector<CCParticle>& inp
         }
         steps = std::max(1, steps); // To avoid zero
 
+        int stagnant = 0;
+        const int stagnation_limit = std::max(sa_StagMin, steps / std::max(1, sa_StagDenom));
+
         //   loop over steps for each "temperature" level
         for (int s = 0; s < steps; ++s) {
-            std::map<int, std::vector<CCParticle*>> mapTestSystem = mapSystem;
-            std::vector<int> clustersKeys;
-            clustersKeys.reserve(mapTestSystem.size());
-            for (auto const& key : mapTestSystem){
-                    clustersKeys.push_back(key.first);
-            }
+            std::uniform_int_distribution<int> pickClusterIndex(0, activeClusters.size() - 1);
 
-            std::uniform_int_distribution<int> pickClusterIndex(0, clustersKeys.size() - 1);
-
-            int inputClusterIdx  = clustersKeys[pickClusterIndex(get_rng())];
-            int outputClusterIdx = clustersKeys[pickClusterIndex(get_rng())];
+            MoveRecord rec;
+            rec.src_id = activeClusters[pickClusterIndex(get_rng())];
+            rec.dst_id = activeClusters[pickClusterIndex(get_rng())];
             int testParticleIdx = 0;
 
-            size_t inputClusterSize = mapTestSystem[inputClusterIdx].size();
+            size_t inputClusterSize = mapSystem[rec.src_id].size();
             if (inputClusterSize > 1){
-                std::uniform_int_distribution<int> pickParticle(0, int(mapTestSystem[inputClusterIdx].size()) - 1);
+                std::uniform_int_distribution<int> pickParticle(0, int(mapSystem[rec.src_id].size()) - 1);
                 testParticleIdx = pickParticle(get_rng());
             }
             
-            while (inputClusterIdx == outputClusterIdx){
-                outputClusterIdx = clustersKeys[pickClusterIndex(get_rng())];
+            while (rec.src_id == rec.dst_id){
+                rec.dst_id = activeClusters[pickClusterIndex(get_rng())];
             }
 
-            mapTestSystem[outputClusterIdx].push_back(mapTestSystem[inputClusterIdx][testParticleIdx]);
+            rec.src_index = static_cast<size_t>(testParticleIdx);
+            rec.dst_index = mapSystem[rec.dst_id].size();
+            rec.moved     = mapSystem[rec.src_id][testParticleIdx];
+
+            mapSystem[rec.dst_id].push_back(rec.moved);
 
             if (inputClusterSize == 1){
-                mapTestSystem[inputClusterIdx].erase(mapTestSystem[inputClusterIdx].begin() + testParticleIdx);
-                mapTestSystem.erase(inputClusterIdx);
+                mapSystem[rec.src_id].erase(mapSystem[rec.src_id].begin() + testParticleIdx);
+                mapSystem.erase(rec.src_id);
+                rec.removed_src = true;
+                remove_active(rec.src_id);
             }
             else{
-                mapTestSystem[inputClusterIdx].erase(mapTestSystem[inputClusterIdx].begin() + testParticleIdx);
+                mapSystem[rec.src_id].erase(mapSystem[rec.src_id].begin() + testParticleIdx);
             }
 
-            double newE = system_energy(mapTestSystem);
+            double oldEin  = 0.0;
+            double oldEout = 0.0;
+            if (clusterE.count(rec.src_id)) oldEin  = clusterE[rec.src_id];
+            if (clusterE.count(rec.dst_id)) oldEout = clusterE[rec.dst_id];
+
+            double newEin  = 0.0;
+            double newEout = 0.0;
+            if (mapSystem.count(rec.src_id)){
+                newEin = cluster_energy(mapSystem[rec.src_id]);
+            }
+            if (mapSystem.count(rec.dst_id)){
+                newEout = cluster_energy(mapSystem[rec.dst_id]);
+            }
+
+            double newE = currE + (newEin - oldEin) + (newEout - oldEout);
             double dE   = newE - currE;
             bool accept = false;
 
@@ -488,10 +615,32 @@ std::vector<CCParticle> CClusterizer::makeSA2(const std::vector<CCParticle>& inp
                 accept = true;
             } 
 
-            if(!accept) continue;
+            if(!accept) {
+                mapSystem[rec.dst_id].erase(mapSystem[rec.dst_id].begin() + rec.dst_index);
+                if (rec.removed_src){
+                    mapSystem[rec.src_id].push_back(rec.moved);
+                    add_active(rec.src_id);
+                }
+                else{
+                    mapSystem[rec.src_id].insert(mapSystem[rec.src_id].begin() + rec.src_index, rec.moved);
+                }
+                stagnant++;
+                if (stagnant >= stagnation_limit) break;
+                continue;
+            }
 
-            mapSystem = std::move(mapTestSystem);
+            stagnant = 0;
             currE = newE;
+            if (mapSystem.count(rec.src_id)){
+                clusterE[rec.src_id] = newEin;
+            } else {
+                clusterE.erase(rec.src_id);
+            }
+            if (mapSystem.count(rec.dst_id)){
+                clusterE[rec.dst_id] = newEout;
+            } else {
+                clusterE.erase(rec.dst_id);
+            }
             if (currE < bestE){
                 bestE      = currE;
                 bestSystem = mapSystem;
@@ -623,7 +772,9 @@ std::vector<CCParticle> CClusterizer::makeSAchain(const std::vector<CCParticle>&
         cls -> setSkyrmeFormula(CClusterizer::getSkyrmeFormula());
         cls -> setComputeEbind(true);
         cls -> setHyPot(CClusterizer::getHyPot());
-        cls -> setSASteps(CClusterizer::getSASteps() * 2);
+        int sa_steps2 = CClusterizer::getSASteps2();
+        if (sa_steps2 < 0) sa_steps2 = CClusterizer::getSASteps() * 2;
+        cls -> setSASteps(sa_steps2);
         cls -> setSATmin(CClusterizer::getSATmin());
 
 

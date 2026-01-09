@@ -41,7 +41,10 @@ class CClusterizer{
         double sa_PnewMin     =   0.25;    // Final probability for the case of linear decrease
         bool   sa_MHCriterion =  false;    // Switch for the usage of Metropolis–Hastings criterion
         double sa_EbindBound  = -0.004;    // Ebind/A for 'bound' clusters selection within makeSAchain()
-  
+        int    sa_StagMin     =     10;    // Min steps before stagnation break
+        int    sa_StagDenom   =     10;    // Steps/denom for stagnation break
+        int    sa_Steps2      =     -1;    // Steps for second SA pass; <0 uses sa_Steps*2
+ 
         SAStepsMode sa_StepsMode = SAStepsMode::Exponential;
         SAProbMode  sa_PnewMode  = SAProbMode::Fixed;
 
@@ -186,6 +189,9 @@ class CClusterizer{
         void setSAPnewMin(double val)    {sa_PnewMin     = val;}
         void setMHCriterion(bool val)    {sa_MHCriterion = val;}
         void setSAEbindBound(double val) {sa_EbindBound  = val;}
+        void setSAStagMin(int val)       {sa_StagMin     = val;}
+        void setSAStagDenom(int val)     {sa_StagDenom   = val;}
+        void setSASteps2(int val)        {sa_Steps2      = val;}
 
         double getSATmax()       const {return sa_Tmax;}
         double getSATmin()       const {return sa_Tmin;}
@@ -194,6 +200,9 @@ class CClusterizer{
         double getSAPnewMin()    const {return sa_PnewMin;}
         bool   getMHCriterion()  const {return sa_MHCriterion;}
         double getSAEbindBound() const {return sa_EbindBound;}
+        int    getSAStagMin()    const {return sa_StagMin;}
+        int    getSAStagDenom()  const {return sa_StagDenom;}
+        int    getSASteps2()     const {return sa_Steps2;}
 
         void setSAStepsMode(SAStepsMode val) {sa_StepsMode = val;}
         void setSAPnewMode(SAProbMode val)   {sa_PnewMode  = val;}
@@ -219,4 +228,3 @@ class CClusterizer{
         bool getTrackingUseEbind()   const {return tr_UseEbind;}
         double getTrackingEbindCut() const {return tr_EbindCut;}
 };
-
