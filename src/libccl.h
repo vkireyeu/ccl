@@ -133,36 +133,48 @@ class CClusterizer{
         static double Beta;  // GeV 
         static double Gamma;
         static double HyPot; // Fraction of the hyperon potential vs normal particles
+        static double Yuk0;
+        static double GamYuk;
         static bool   ComputeSkyrme;
         static bool   ComputeCoulomb;
         static bool   ComputeEasy;
+        static bool   SmearedCoulomb;
+        static bool   ComputeYukawa;
 
-        static void setEc2(double value)   {Ec2   = value;}
-        static void setAl(double value)    {Al    = value;}
-        static void setSal(double value)   {Sal   = value;}
-        static void setAlpha(double value) {Alpha = value;}
-        static void setBeta(double value ) {Beta  = value;}
-        static void setGamma(double value) {Gamma = value;}
-        static void setHyPot(double value) {HyPot = value;}
+        static void setEc2(double value)    {Ec2    = value;}
+        static void setAl(double value)     {Al     = value;}
+        static void setSal(double value)    {Sal    = value;}
+        static void setAlpha(double value)  {Alpha  = value;}
+        static void setBeta(double value )  {Beta   = value;}
+        static void setGamma(double value)  {Gamma  = value;}
+        static void setHyPot(double value)  {HyPot  = value;}
+        static void setYuk0(double value)   {Yuk0   = value;}
+        static void setGamYuk(double value) {GamYuk = value;}
         static void setAlphaBetaGamma(double A, double B, double G){
             Alpha = A; Beta  = B; Gamma = G;
         }
-        static void setComputeSkyrme(bool check) {ComputeSkyrme  = check;}
-        static void setComputeCoul(bool check)   {ComputeCoulomb = check;}
-        static void setComputeEasy(bool check)   {ComputeEasy    = check;}
+        static void setComputeSkyrme(bool check)  {ComputeSkyrme  = check;}
+        static void setComputeCoul(bool check)    {ComputeCoulomb = check;}
+        static void setSmearedCoulomb(bool check) {SmearedCoulomb = check;}
+        static void setComputeEasy(bool check)    {ComputeEasy    = check;}
+        static void setComputeYukawa(bool check)  {ComputeYukawa  = check;}
 
-        static double getEc2()           {return Ec2;}
-        static double getAl()            {return Al;}
-        static double getSal()           {return Sal;}
-        static double getAlpha()         {return Alpha;}
-        static double getBeta()          {return Beta;}
-        static double getGamma()         {return Gamma;}
-        static double getHyPot()         {return HyPot;}
-        static double getAlpha0()        {return 0.5 * Alpha / Sal;}
-        static double getBeta0()         {return Beta / ((Gamma + 1.0) * std::pow(Sal, Gamma));}
-        static bool   getComputeSkyrme() {return ComputeSkyrme;}
-        static bool   getComputeCoul()   {return ComputeCoulomb;}
-        static bool   getComputeEasy()   {return ComputeEasy;}
+        static double getEc2()            {return Ec2;}
+        static double getAl()             {return Al;}
+        static double getSal()            {return Sal;}
+        static double getAlpha()          {return Alpha;}
+        static double getBeta()           {return Beta;}
+        static double getGamma()          {return Gamma;}
+        static double getHyPot()          {return HyPot;}
+        static double getYuk0()           {return Yuk0;}
+        static double getGamYuk()         {return GamYuk;}
+        static double getAlpha0()         {return 0.5 * Alpha / Sal;}
+        static double getBeta0()          {return Beta / ((Gamma + 1.0) * std::pow(Sal, Gamma));}
+        static bool   getComputeSkyrme()  {return ComputeSkyrme;}
+        static bool   getComputeCoul()    {return ComputeCoulomb;}
+        static bool   getSmearedCoulomb() {return SmearedCoulomb;}
+        static bool   getComputeEasy()    {return ComputeEasy;}
+        static bool   getComputeYukawa()  {return ComputeYukawa;}
 
 
 

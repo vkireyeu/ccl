@@ -1,23 +1,28 @@
 #include "libccl.h"
 
 // Default values (MUST be overriden by setters)
-double CClusterizer::Ec2   =  0.00144;    // GeV * fm
-double CClusterizer::Al    =  3.;         // fm^2
-double CClusterizer::Sal   =  5.;         // fm^2
-double CClusterizer::Alpha = -0.15;       // GeV 
-double CClusterizer::Beta  =  0.05;       // GeV 
-double CClusterizer::Gamma =  1.5;
-double CClusterizer::HyPot =  1.;
+double CClusterizer::Ec2    =  0.00144;    // GeV * fm
+double CClusterizer::Al     =  3.;         // fm^2
+double CClusterizer::Sal    =  5.;         // fm^2
+double CClusterizer::Alpha  = -0.15;       // GeV
+double CClusterizer::Beta   =  0.05;       // GeV
+double CClusterizer::Gamma  =  1.5;
+double CClusterizer::HyPot  =  1.;
+double CClusterizer::Yuk0   = 0.0;         // GeV
+double CClusterizer::GamYuk = 1.4;         // fm
 
 // Skyrme part for computeClusterPotentialEnergy
-bool    CClusterizer::ComputeSkyrme = true;
+bool CClusterizer::ComputeSkyrme  = true;
 
 // Coulomb part for computeClusterPotentialEnergy
-bool    CClusterizer::ComputeCoulomb = false;
+bool CClusterizer::ComputeCoulomb = false;
+bool CClusterizer::SmearedCoulomb = false;
 
 // Asymmetry energy part for computeClusterPotentialEnergy
-bool    CClusterizer::ComputeEasy = false;
+bool CClusterizer::ComputeEasy    = false;
 
+// Yukawa part for computeClusterPotentialEnergy
+bool CClusterizer::ComputeYukawa  = false;
 
 CClusterizer::CClusterizer(){
 }

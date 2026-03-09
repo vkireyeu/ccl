@@ -1,5 +1,11 @@
 #include "EnergyUtils.h"
 
+namespace {
+    constexpr double kEr0 = 1.1283791670955126; // 2 / sqrt(pi)
+    constexpr double kEps = 1e-12;              // Small value to avoid division by zero
+}
+
+
 // ---------------------------------------------------------------------
 // Calculate kinetic energy of the cluster (group of baryons):
 // E_kin is full here, not divided by cluster mass number A
@@ -16,9 +22,9 @@ double computeClusterKineticEnergy(const std::vector<CCParticle*>& group) {
     }
 
     // Cluster velocities
-    double bx = totalPx / totalE;
-    double by = totalPy / totalE;
-    double bz = totalPz / totalE;
+    const double bx = totalPx / totalE;
+    const double by = totalPy / totalE;
+    const double bz = totalPz / totalE;
 
     double E_kin = 0;
     // Kinetic energy of the cluster = sum of the kinetic energies of 
@@ -42,15 +48,27 @@ double ComputeCoulombPart(const std::vector<CCParticle>& group) {
     const double ec2   = CClusterizer::getEc2();
     const double al    = CClusterizer::getAl();
 
+    const double inv_sqrt_al = std::sqrt(1.0 / al);
+
     double V_coul = 0.0;
     for (size_t i = 0; i + 1 < group.size(); ++i) {
         for (size_t j = i + 1; j < group.size(); ++j) {
-            double dx = group[i].getX() - group[j].getX();
-            double dy = group[i].getY() - group[j].getY();
-            double dz = group[i].getZ() - group[j].getZ();
-            double r = std::sqrt(dx*dx + dy*dy + dz*dz + 1e-6);
-            double x = std::sqrt(1.0 / al) * r;
-            V_coul += ec2 / r * (1.0 - std::erf(x));
+            const double dx = group[i].getX() - group[j].getX();
+            const double dy = group[i].getY() - group[j].getY();
+            const double dz = group[i].getZ() - group[j].getZ();
+            const double r2 = dx * dx + dy * dy + dz * dz;
+            const double r = std::sqrt(r2);
+
+            if (CClusterizer::getSmearedCoulomb()) {
+                if (r < kEps) {
+                    V_coul += ec2 * kEr0 * inv_sqrt_al;
+                } else {
+                    V_coul += ec2 * std::erf(inv_sqrt_al * r) / r;
+                }
+            } else {
+                const double r_safe = std::sqrt(r2 + 1e-6);
+                V_coul += ec2 * (1.0 - std::erf(inv_sqrt_al * r_safe)) / r_safe;
+            }
         }
     }
     return V_coul;
@@ -71,17 +89,16 @@ double ComputeEasyPart(const std::vector<CCParticle>& group) {
     const double E_0 = 0.0233;    // Asymmetry energy constant 0.0233 GeV = 23.3 MeV
     const double rho_0 = 0.16;    // Saturation density scale (relative units)
     const double gamma = 0.67;    // Density exponent (soft-to-stiff EOS)
-    const double eps = 1e-15;     // Small value to avoid division by zero
 
     // Build per-particle local "density"
     std::vector<double> rho_loc(N, 0.0);
     for (size_t i = 0; i + 1 < N; ++i) {
         for (size_t j = i + 1; j < N; ++j) {
-            double dx = group[i].getX() - group[j].getX();
-            double dy = group[i].getY() - group[j].getY();
-            double dz = group[i].getZ() - group[j].getZ();
-            double r2 = dx*dx + dy*dy + dz*dz;
-            double overlap = std::exp(-r2 / al) * (sal / al); // Scale overlap by sal/al
+            const double dx = group[i].getX() - group[j].getX();
+            const double dy = group[i].getY() - group[j].getY();
+            const double dz = group[i].getZ() - group[j].getZ();
+            const double r2 = dx*dx + dy*dy + dz*dz;
+            const double overlap = std::exp(-r2 / al) * (sal / al); // Scale overlap by sal/al
             rho_loc[i] += overlap;
             rho_loc[j] += overlap;
         }
@@ -102,14 +119,14 @@ double ComputeEasyPart(const std::vector<CCParticle>& group) {
         if      (group[i].getType() == ParticleType::Proton)  rho_p += rho_loc[i];
         else if (group[i].getType() == ParticleType::Neutron) rho_n += rho_loc[i];
     }
-    if (rho_B <= eps) return 0.0;
+    if (rho_B <= kEps) return 0.0;
 
     // \delta = (\rho_{n} - \rho_{p}) / \rho_{B}
     // Usually \rho_{B} = \rho_{n} + \rho_{p}, but hyperons also can enter \rho_{B}
     double delta = (rho_n - rho_p) / rho_B;
 
     // < \rho_{B} > / \rho_{0}  =  (\rho_{B} / N) / \rho_{0}
-    double rho_ratio = std::max(rho_B / (rho_0 * N), eps);
+    double rho_ratio = std::max(rho_B / (rho_0 * N), kEps);
 
     // E_asy = E0 * delta^2 * (<\rho_{B}>/\rho_{0})^gamma  * N
     return E_0 * delta * delta * std::pow(rho_ratio, gamma) * N;
@@ -137,17 +154,17 @@ double ComputeSkyrmePart(const std::vector<CCParticle>& group, CClusterizer* par
         double w_i = (group[i].getType() == ParticleType::LambdaSigma) ? hypot : 1.0;
         for (size_t j = i + 1; j < N; ++j) {
             // Weight = CClusterizer::getHyPot() for hyperons, 1 for other particles
-            double w_j = (group[j].getType() == ParticleType::LambdaSigma) ? hypot : 1.0;
-            double weight = w_i * w_j; // Common pair weight
+            const double w_j = (group[j].getType() == ParticleType::LambdaSigma) ? hypot : 1.0;
+            const double weight = w_i * w_j; // Common pair weight
 
             // Calculate distance between group in the cluster COM frame
-            double dx = group[i].getX() - group[j].getX();
-            double dy = group[i].getY() - group[j].getY();
-            double dz = group[i].getZ() - group[j].getZ();
-            double r2 = dx*dx + dy*dy + dz*dz;
+            const double dx = group[i].getX() - group[j].getX();
+            const double dy = group[i].getY() - group[j].getY();
+            const double dz = group[i].getZ() - group[j].getZ();
+            const double r2 = dx*dx + dy*dy + dz*dz;
             // rho = density
-            double rho     = std::exp(-r2 / al);
-            double contrib = rho * weight;
+            const double rho     = std::exp(-r2 / al);
+            const double contrib = rho * weight;
             pd[i] += contrib;
             pd[j] += contrib;
 
@@ -159,8 +176,47 @@ double ComputeSkyrmePart(const std::vector<CCParticle>& group, CClusterizer* par
     }
 
     SkyrmeInput input(alpha0, beta0, gamma, pd);
-    return parent->getSkyrmeFormula()(input);
+    return parent -> getSkyrmeFormula()(input);
 }
+
+
+
+// ---------------------------------------------------------------------
+// Yukawa potential component
+// ---------------------------------------------------------------------
+double ComputeYukawaPart(const std::vector<CCParticle>& group) {
+    const double al     = CClusterizer::getAl();
+    const double yuk0   = CClusterizer::getYuk0();
+    const double gamYuk = CClusterizer::getGamYuk();
+
+    const double inv_sqrt_al = std::sqrt(1.0 / al);
+    const double exp_term    = std::exp(0.25 * al / (gamYuk * gamYuk));
+    const double arg0        = 0.5 * std::sqrt(al) / gamYuk;
+
+    double V_yuk = 0.0;
+    for (size_t i = 0; i + 1 < group.size(); ++i) {
+        for (size_t j = i + 1; j < group.size(); ++j) {
+            const double dx = group[i].getX() - group[j].getX();
+            const double dy = group[i].getY() - group[j].getY();
+            const double dz = group[i].getZ() - group[j].getZ();
+            const double r = std::sqrt(dx * dx + dy * dy + dz * dz);
+
+            if (r < kEps) {
+                V_yuk += yuk0 * (kEr0 * inv_sqrt_al - exp_term / gamYuk * std::erfc(arg0));
+            }
+            else {
+                const double arg_m = arg0 - inv_sqrt_al * r;
+                const double arg_p = arg0 + inv_sqrt_al * r;
+
+                V_yuk += 0.5 * yuk0 / r * exp_term
+                       * (std::exp(-r / gamYuk) * std::erfc(arg_m)
+                        - std::exp( r / gamYuk) * std::erfc(arg_p));
+            }
+        }
+    }
+    return V_yuk;
+}
+
 
 
 
@@ -182,9 +238,9 @@ double computeClusterPotentialEnergy(const std::vector<CCParticle*>& group, CClu
     }
 
     // Cluster velocities
-    double bx = totalPx / totalE;
-    double by = totalPy / totalE;
-    double bz = totalPz / totalE;
+    const double bx = totalPx / totalE;
+    const double by = totalPy / totalE;
+    const double bz = totalPz / totalE;
 
     if (debug) {
         debug -> b_values.push_back(bx);
@@ -222,12 +278,19 @@ double computeClusterPotentialEnergy(const std::vector<CCParticle*>& group, CClu
         V_skyrme = ComputeSkyrmePart(baryons, parent, debug);
     }
 
+    // Assymetry energy
     double E_asy = 0.0;
     if(CClusterizer::getComputeEasy()){
         E_asy = ComputeEasyPart(baryons);
     }
 
-    return V_skyrme + V_coul + E_asy; // This is E_pot -- potential energy
+    // Yukawa part
+    double V_yuk = 0.0;
+    if (CClusterizer::getComputeYukawa()) {
+        V_yuk = ComputeYukawaPart(baryons);
+    }
+
+    return V_skyrme + V_coul + V_yuk + E_asy; // This is E_pot -- potential energy
 }
 
 
